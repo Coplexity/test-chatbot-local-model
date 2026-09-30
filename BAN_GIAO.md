@@ -7,7 +7,7 @@ Cập nhật ngày 2026-09-30. Người nhận: anh Triệu.
 - `medical-chatbot/chat-api` đã được sửa để mọi lời gọi sinh văn bản đi tới Qwen3.6-27B trên Server A (vLLM, API kiểu OpenAI Chat Completions) thay cho `gpt-4.1` của OpenAI.
 - Embedding vẫn dùng OpenAI `text-embedding-3-large`, nên vẫn cần `OPENAI_API_KEY` và không phải reindex DB.
 - NestJS backend, frontend và giao thức SSE tới trình duyệt không đổi.
-- **Chưa chạy với Server A thật.** Code mới chỉ được kiểm chứng với một server giả lập API của vLLM (chi tiết ở mục 6). Hai thứ còn thiếu là key của A và đường mạng tới A.
+- **Đã chạy với Server A thật** ngày 2026-09-30, qua SSH tunnel từ máy local của người bàn giao: script kiểm tra qua đủ 11 bước và một câu hỏi thử trả lời được ở cả basic và deep (chi tiết ở mục 6). Với máy deploy, hai thứ còn thiếu là key của A và đường mạng tới A.
 - Chưa deploy ở đâu ngoài máy local của người bàn giao.
 
 Không có secret nào trong repo. File `medical-chatbot/deploy/.env` bị gitignore, phải tạo lại từ `.env.example`.
@@ -39,7 +39,7 @@ cp deploy/.env.example deploy/.env
 | `VITE_DOCUMENT_FILE_URL_TEMPLATE` | URL mở file tài liệu, giữ nguyên `{documentId}` | Địa chỉ public của guideline backend |
 | `VITE_BACKEND_URL`, `CHAT_API_URL` | Để trống nếu project compose tên `medical-chatbot`; nếu đổi tên project thì phải điền | Xem mục 5.3 |
 
-Các biến `LLM_MODEL`, `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_CONCURRENCY`, `LLM_STRUCTURED_OUTPUT_METHOD` đã có giá trị mặc định dùng được trong `.env.example`.
+Các biến `LLM_MODEL`, `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_CONTEXT_TOKENS`, `LLM_MAX_TOKENS`, `LLM_MAX_CONCURRENCY`, `LLM_STRUCTURED_OUTPUT_METHOD`, `RETRIEVAL_DEEP_DOCUMENT_LIMIT`, `RETRIEVAL_DEEP_TOP_K` đã có giá trị mặc định dùng được trong `.env.example`.
 
 Thiếu `LLM_BASE_URL` hoặc `LLM_API_KEY` thì `chat-api` dừng ngay lúc khởi động với lỗi `Thiếu cấu hình LLM: ...` và container restart liên tục. Đây là chủ ý: không có đường fallback sang OpenAI.
 
@@ -121,7 +121,7 @@ cd medical-chatbot/deploy
 docker compose exec chat-api python -m scripts.check_llm
 ```
 
-Script chạy 9 bước: key sai bị từ chối, alias model, chat thường, trần output, streaming, 3 schema thật của các node routing/validator, và request song song. Kết quả đạt là dòng cuối `LLM_CHECK_COMPLETE`. Cách đọc lỗi:
+Script chạy 11 bước: key sai bị từ chối, alias model, chat thường, trần output, streaming, 3 schema thật của các node routing/validator, request song song, đếm token qua `/tokenize`, và cắt context vượt ngân sách. Kết quả đạt là dòng cuối `LLM_CHECK_COMPLETE`. Cách đọc lỗi:
 
 | Dấu hiệu | Nguyên nhân thường gặp |
 | --- | --- |
@@ -138,21 +138,32 @@ Sau đó mở web và hỏi một câu y khoa ở cả hai chế độ basic và
 - Request gửi đi khớp [API contract](Tai%20lieu%20cho%20local%20model%20mới/API_CONTRACT.md): model alias, `chat_template_kwargs.enable_thinking=false` ở top level, `stream_options.include_usage`, `response_format` kiểu `json_schema` với `strict: true`.
 - Chế độ basic chạy trọn luồng với database và embedding thật, stream ra đúng định dạng.
 
+**Đã kiểm chứng với Server A thật** (2026-09-30, qua SSH tunnel; database local chỉ có 1 văn bản đã embedding):
+
+- Cả 11 bước của script đều qua với `json_schema`. `/tokenize` đếm khớp đúng số `prompt_tokens` mà A tính cho request thật.
+- Một câu hỏi về phác đồ điều trị lao phổi trả lời đúng theo tài liệu và có trích dẫn ở cả hai chế độ: basic 107 giây, deep 158 giây. Lúc đo, GPU của A đang dùng chung với job khác, tốc độ sinh khoảng 9 token/giây.
+- Prompt của expert với 10 chunk (basic) chiếm 21.965 token; với 6 chunk (deep) chiếm 10.209 token, trên ngân sách input 61.184 token.
+- Chốt chặn token: một context cố tình nhân lên thành 84.419 token được cắt còn 61.117 token (giữ 28/40 chunk) và A nhận request. Cùng context đó khi không qua chốt chặn thì A trả lỗi 400 về context.
+
 **Chưa kiểm chứng:**
 
-- Bất kỳ request nào tới Server A thật.
-- Các node experts, aggregator và synthesizer của chế độ deep qua luồng ứng dụng: dữ liệu giả không truy xuất được văn bản nào nên luồng rẽ sang câu trả lời mặc định.
-- Chất lượng câu trả lời y khoa, trích dẫn, độ trễ và tải đồng thời.
+- Chế độ deep với nhiều văn bản hoặc nhiều chuyên khoa: database thử chỉ có 1 văn bản nên luồng bỏ qua hai node aggregator.
+- `LLM_STRUCTURED_OUTPUT_METHOD=function_calling` với Server A thật (mới thử với server giả lập).
+- Chất lượng câu trả lời y khoa trên bộ câu hỏi rộng, độ trễ và tải đồng thời.
 
 ## 7. Thay đổi trong repo
 
 | File | Thay đổi |
 | --- | --- |
-| `medical-chatbot/chat-api/core/config.py` | Đọc các biến `LLM_*` mới |
+| `medical-chatbot/chat-api/core/config.py` | Đọc các biến `LLM_*` và `RETRIEVAL_DEEP_*` mới |
 | `medical-chatbot/chat-api/core/llm_client.py` (mới) | Factory `get_llm(temperature)`: trỏ tới A, tắt thinking, timeout, trần output, giới hạn đồng thời, báo lỗi khi thiếu cấu hình |
 | 12 file node trong `nodes/` và `basic_mode/nodes/` | Dùng factory thay cho `ChatOpenAI(...)` trực tiếp; 6 chỗ structured output chỉ định rõ method |
+| `medical-chatbot/chat-api/core/context_budget.py` (mới) | Chốt chặn token: đếm prompt của expert bằng `/tokenize` của A, vượt ngân sách input thì bỏ chunk xếp hạng thấp nhất |
+| `nodes/reasoning/domain_experts.py`, `basic_mode/nodes/reasoning/domain_experts.py` | Dựng prompt qua chốt chặn token trước khi gọi A |
+| `nodes/retrieval/vector_retrieval.py` | Deep mode lấy tối đa 4 văn bản mỗi chuyên khoa và 6 chunk mỗi văn bản (trước là 10 và 10), chỉnh được qua `.env` |
+| `nodes/routing/disease_routing.py`, `basic_mode/nodes/routing/disease_routing.py` | Bỏ tiền tố `<chuyên khoa>: ` mà Qwen chép kèm tên bệnh |
 | `medical-chatbot/chat-api/scripts/check_llm.py` (mới) | Script kiểm tra ở mục 6 |
-| `medical-chatbot/deploy/docker-compose.yml`, `dev-compose.yml` | Truyền biến `LLM_*` vào service `chat-api` |
+| `medical-chatbot/deploy/docker-compose.yml`, `dev-compose.yml` | Truyền biến `LLM_*` và `RETRIEVAL_DEEP_*` vào service `chat-api` |
 | `medical-chatbot/deploy/.env.example` | Thêm biến mới, bỏ `LLM_MODEL=gpt-4.1` |
 | `medical-chatbot/LOCAL_RUNBOOK.md` | Thêm mục 4.1 (kết nối Server A), bước kiểm tra LLM, xử lý lỗi |
 | `medical-chatbot/chat-api/Dockerfile`, `requirements.txt` | Bỏ `streamlit`, `sentence-transformers`, `FlagEmbedding` để image nhẹ |
@@ -162,7 +173,8 @@ Sau đó mở web và hỏi một câu y khoa ở cả hai chế độ basic và
 
 Các mục dưới đây nằm trong kế hoạch tích hợp của [HANDOVER.md](Tai%20lieu%20cho%20local%20model%20mới/HANDOVER.md) nhưng chưa thực hiện.
 
-- **Chưa đếm token bằng tokenizer Qwen.** Không có bước cắt bớt context trước khi gọi A. Ở một câu hỏi thử, prompt của node expert dài khoảng 66.000 ký tự; chưa đo xem nó chiếm bao nhiêu trong context 65536 token (trừ 4096 token output). Nếu A trả lỗi 400 về context thì đây là chỗ cần xem đầu tiên.
+- **Chốt chặn token chỉ áp dụng cho prompt của expert**, nơi chứa chunk tài liệu. Prompt của aggregator và synthesizer chứa báo cáo của các bước trước chứ không chứa chunk nên chưa được chặn; synthesizer của deep nhận cùng lúc báo cáo theo chuyên khoa, theo bệnh và theo văn bản (mỗi báo cáo tối đa 4096 token), nên câu hỏi trải nhiều chuyên khoa vẫn có thể vượt context. Nếu A trả lỗi 400 về context thì đây là chỗ cần xem đầu tiên.
+- **Chưa giới hạn độ dài từng chunk.** Chunk dài nhất trong database thử là 21.560 ký tự. Nếu `/tokenize` không gọi được (ví dụ A đứng sau một gateway không mở endpoint này), chốt chặn chuyển sang ước lượng 2,5 ký tự/token và ghi một dòng cảnh báo trong log.
 - **Timeout 180 giây** là con số của smoke test ngắn trên A, chưa phải mức phù hợp cho chế độ deep. Tăng bằng `LLM_TIMEOUT_SECONDS`.
 - **Giới hạn đồng thời chỉ có hiệu lực trong một process** và chỉ với các lời gọi async (experts, aggregator, synthesizer). Validator và router gọi kiểu sync, nên khi có nhiều người dùng cùng lúc A vẫn có thể nhận hơn 1 request và tự xếp hàng.
 - **Chưa lưu usage theo từng node** và chưa xử lý riêng trường hợp `finish_reason=length` cho các câu trả lời dạng văn bản (câu trả lời có thể bị cắt ở 4096 token mà không báo).

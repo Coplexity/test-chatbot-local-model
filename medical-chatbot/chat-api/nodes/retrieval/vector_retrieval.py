@@ -11,9 +11,10 @@ class VectorRetrievalNode:
     def __init__(self):
         print("⏳ [Retriever] Loading Embedding Model...")
         self.embedding_backend = "sentence_transformers"
-        self.retrieval_top_k = 10
+        # Số chunk tối đa mỗi văn bản và số văn bản tối đa mỗi chuyên khoa: chỉnh qua .env.
+        self.retrieval_top_k = config.RETRIEVAL_DEEP_TOP_K
         self.retrieval_candidate_k = 30
-        self.document_limit_per_specialty = 10
+        self.document_limit_per_specialty = config.RETRIEVAL_DEEP_DOCUMENT_LIMIT
         # Keep only chunks whose vector distance to query is good enough.
         # Lower distance means more relevant.
         self.max_chunk_semantic_distance = 0.65

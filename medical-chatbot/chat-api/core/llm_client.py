@@ -5,9 +5,14 @@ from core import config
 
 _STRUCTURED_OUTPUT_METHODS = {"json_schema", "function_calling"}
 
+# Dùng khi không gọi được /tokenize. Đo thật trên prompt tiếng Việt của expert là ~3.07 ký tự/token;
+# lấy thấp hơn để ước lượng dư token, thà cắt thừa còn hơn vượt context.
+_FALLBACK_CHARS_PER_TOKEN = 2.5
+
 _http_client = None
 _http_async_client = None
 _announced = False
+_tokenize_warned = False
 
 
 def _validate_config():
@@ -75,3 +80,35 @@ def get_llm(temperature: float) -> ChatOpenAI:
         http_client=http_client,
         http_async_client=http_async_client,
     )
+
+
+async def count_tokens(prompt: str) -> int:
+    """Đếm token input của một prompt đúng như A sẽ nhận (đã qua chat template của Qwen)."""
+    global _tokenize_warned
+    _validate_config()
+    # /tokenize của vLLM nằm ở gốc server, không nằm dưới /v1.
+    url = config.LLM_BASE_URL.removesuffix("/v1") + "/tokenize"
+    payload = {
+        "model": config.LLM_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "add_generation_prompt": True,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    try:
+        # Client riêng: đếm token không chiếm slot sinh văn bản của LLM_MAX_CONCURRENCY.
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
+            )
+            response.raise_for_status()
+            return int(response.json()["count"])
+    except Exception as exc:
+        if not _tokenize_warned:
+            print(
+                f"⚠️ [LLM] Không đếm được token qua {url} ({type(exc).__name__}); "
+                f"tạm ước lượng {_FALLBACK_CHARS_PER_TOKEN} ký tự/token."
+            )
+            _tokenize_warned = True
+        return int(len(prompt) / _FALLBACK_CHARS_PER_TOKEN) + 1

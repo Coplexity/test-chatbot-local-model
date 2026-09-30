@@ -121,12 +121,16 @@ LLM_API_KEY=key_cua_server_a
 LLM_MODEL=qwen3.6-27b
 LLM_TIMEOUT_SECONDS=180
 LLM_MAX_RETRIES=0
+LLM_CONTEXT_TOKENS=65536
 LLM_MAX_TOKENS=4096
 LLM_MAX_CONCURRENCY=1
 LLM_STRUCTURED_OUTPUT_METHOD=json_schema
 
 OPENAI_API_KEY=your_openai_key_here
 EMBEDDING_MODEL=text-embedding-3-large
+
+RETRIEVAL_DEEP_DOCUMENT_LIMIT=4
+RETRIEVAL_DEEP_TOP_K=6
 ```
 
 Giai thich nhanh:
@@ -137,6 +141,8 @@ Giai thich nhanh:
 - `DB_SYNCHRONIZE=true`: dung cho local de backend tu tao schema/table can thiet. Khi deploy production nen dat `false`.
 - `LLM_BASE_URL`, `LLM_API_KEY`: dia chi va key cua Server A. Thieu mot trong hai thi `chat-api` dung ngay luc khoi dong voi loi `Thiếu cấu hình LLM`, khong tu chuyen sang OpenAI.
 - `LLM_MAX_TOKENS`: tran output moi lan goi, tinh trong context 65536 cua A.
+- `LLM_CONTEXT_TOKENS`: context cua model tren A. Ngan sach input moi lan goi = `LLM_CONTEXT_TOKENS - LLM_MAX_TOKENS - 256` (mac dinh 61184 token). Truoc moi lan goi expert, `chat-api` dem token bang endpoint `/tokenize` cua A; neu vuot ngan sach thi bo bot chunk xep hang thap nhat va ghi log `[Context Budget]`.
+- `RETRIEVAL_DEEP_DOCUMENT_LIMIT`, `RETRIEVAL_DEEP_TOP_K`: che do deep lay toi da bao nhieu van ban moi chuyen khoa va bao nhieu chunk moi van ban. Moi van ban la mot lan goi LLM rieng, nen tang hai so nay se lam cau tra loi cham hon. Che do basic khong doi (10 chunk moi chuyen khoa).
 - `LLM_MAX_CONCURRENCY`: so request LLM dong thoi tu `chat-api`. A dang chay `MAX_NUM_SEQS=1` nen de `1`.
 - `LLM_STRUCTURED_OUTPUT_METHOD`: `json_schema` hoac `function_calling` cho cac node routing/validator.
 - `OPENAI_API_KEY`: chi con dung cho embedding. Khong commit file `.env`.
