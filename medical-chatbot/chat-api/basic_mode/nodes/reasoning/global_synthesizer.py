@@ -1,6 +1,5 @@
 import re
-from langchain_openai import ChatOpenAI
-from core import config
+from core.llm_client import get_llm
 from basic_mode.core.schemas import RouterState
 from basic_mode.core.prompts import SYNTHESIZER_PROMPT
 from basic_mode.nodes.reasoning.citation_transformer import CitationStreamTransformer
@@ -11,7 +10,7 @@ class GlobalSynthesizerNode:
 
     def __init__(self):
         print("⏳ [Synthesizer] Initializing Global Synthesizer...")
-        self.llm = ChatOpenAI(model=config.LLM_MODEL, api_key=config.OPENAI_API_KEY, temperature=0.1)
+        self.llm = get_llm(temperature=0.1)
 
     @staticmethod
     def _stream_tokens(text):

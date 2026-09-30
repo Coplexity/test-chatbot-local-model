@@ -46,7 +46,8 @@ medical-chatbot
 - Docker Desktop dang chay.
 - Docker Compose v2.
 - Git.
-- OpenAI API key neu muon test luong chat AI that.
+- OpenAI API key cho embedding (`text-embedding-3-large`).
+- Duong mang va API key toi Server A (Qwen3.6-27B qua vLLM) de sinh cau tra loi. Xem muc 4.1.
 
 ## 3. Chay Database
 
@@ -115,8 +116,16 @@ DB_LOGGING=false
 
 JWT_SECRET=change_me_for_local_development
 
+LLM_BASE_URL=http://host.docker.internal:8001/v1
+LLM_API_KEY=key_cua_server_a
+LLM_MODEL=qwen3.6-27b
+LLM_TIMEOUT_SECONDS=180
+LLM_MAX_RETRIES=0
+LLM_MAX_TOKENS=4096
+LLM_MAX_CONCURRENCY=1
+LLM_STRUCTURED_OUTPUT_METHOD=json_schema
+
 OPENAI_API_KEY=your_openai_key_here
-LLM_MODEL=gpt-4.1
 EMBEDDING_MODEL=text-embedding-3-large
 ```
 
@@ -126,7 +135,27 @@ Giai thich nhanh:
 - `DB_PORT=5436`: port PostgreSQL cua `ai_documents_management`.
 - `VITE_BACKEND_URL=http://chat-backend:3000`: frontend nginx proxy den NestJS backend trong Docker network.
 - `DB_SYNCHRONIZE=true`: dung cho local de backend tu tao schema/table can thiet. Khi deploy production nen dat `false`.
-- `OPENAI_API_KEY`: can key that neu muon test chat AI. Khong commit file `.env`.
+- `LLM_BASE_URL`, `LLM_API_KEY`: dia chi va key cua Server A. Thieu mot trong hai thi `chat-api` dung ngay luc khoi dong voi loi `Thiếu cấu hình LLM`, khong tu chuyen sang OpenAI.
+- `LLM_MAX_TOKENS`: tran output moi lan goi, tinh trong context 65536 cua A.
+- `LLM_MAX_CONCURRENCY`: so request LLM dong thoi tu `chat-api`. A dang chay `MAX_NUM_SEQS=1` nen de `1`.
+- `LLM_STRUCTURED_OUTPUT_METHOD`: `json_schema` hoac `function_calling` cho cac node routing/validator.
+- `OPENAI_API_KEY`: chi con dung cho embedding. Khong commit file `.env`.
+
+### 4.1. Ket Noi Toi LLM Tren Server A
+
+Server A chi listen `127.0.0.1:8000`, nen tu may local can mo SSH tunnel. Cong 8000 cua may local da dung cho guideline backend, vi vay tunnel dung cong 8001:
+
+```bash
+ssh -N -L 8001:127.0.0.1:8000 <user>@<server-a>
+```
+
+Giu terminal nay mo trong luc test. Container `chat-api` goi tunnel qua `http://host.docker.internal:8001/v1`.
+
+Neu A da mo IP noi bo/VPN cho may nay thi khong can tunnel, dat `LLM_BASE_URL=http://<IP_NOI_BO_A>:8000/v1`.
+
+`LLM_API_KEY` la noi dung file `.api-key` tren Server A, khong phai key OpenAI.
+
+Chi tiet API: `Tai lieu cho local model mới/API_CONTRACT.md` o root repo.
 
 ## 5. Tao Docker Network
 
@@ -218,6 +247,19 @@ Ket qua mong doi:
     }
   }
 }
+```
+
+Kiem tra ket noi `chat-api` toi LLM tren Server A (can tunnel dang mo):
+
+```bash
+cd medical-chatbot/deploy
+docker compose exec chat-api python -m scripts.check_llm
+```
+
+Ket qua mong doi la cac dong `PASS ...` va dong cuoi:
+
+```text
+LLM_CHECK_COMPLETE (chỉ request ngắn; chưa test sát context hay chất lượng y khoa)
 ```
 
 Mo ung dung:
@@ -387,13 +429,38 @@ docker compose up -d db
 
 ### Chat AI loi khi gui cau hoi
 
-Kiem tra `OPENAI_API_KEY` trong `medical-chatbot/deploy/.env`.
+Chay kiem tra ket noi LLM de biet loi nam o dau:
 
-Sau khi sua key:
+```bash
+cd medical-chatbot/deploy
+docker compose exec chat-api python -m scripts.check_llm
+```
+
+- `Connection refused` / timeout: SSH tunnel toi Server A chua mo hoac vLLM tren A chua chay.
+- HTTP 401 o buoc `model alias`: `LLM_API_KEY` sai.
+- `không thấy alias`: `LLM_MODEL` khong khop alias A dang phuc vu.
+- Cau hoi dung o buoc `Truy xuat` voi loi 401 cua OpenAI: kiem tra `OPENAI_API_KEY` (embedding).
+
+Neu `chat-api` restart lien tuc, xem log:
+
+```bash
+docker compose logs --tail 30 chat-api
+```
+
+Loi `Thiếu cấu hình LLM: ...` nghia la chua dien `LLM_BASE_URL` hoac `LLM_API_KEY` trong `medical-chatbot/deploy/.env`.
+
+Sau khi sua `.env`:
 
 ```bash
 cd medical-chatbot/deploy
 docker compose up -d --no-build --force-recreate chat-api
+```
+
+Sau khi sua code `chat-api` phai build lai image:
+
+```bash
+cd medical-chatbot/deploy
+docker compose up -d --build chat-api
 ```
 
 ## 12. Lenh Nhanh Hang Ngay

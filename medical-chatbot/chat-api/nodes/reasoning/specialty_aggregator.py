@@ -1,9 +1,8 @@
 import asyncio
 from collections import defaultdict
 
-from langchain_openai import ChatOpenAI
 
-from core import config
+from core.llm_client import get_llm
 from core.prompts import SPECIALTY_AGGREGATOR_PROMPT
 from core.schemas import RouterState
 
@@ -13,7 +12,7 @@ class SpecialtyAggregatorNode:
 
     def __init__(self):
         print("⏳ [Specialty Aggregator] Initializing...")
-        self.llm = ChatOpenAI(model=config.LLM_MODEL, api_key=config.OPENAI_API_KEY, temperature=0.1)
+        self.llm = get_llm(temperature=0.1)
 
     async def process(self, state: RouterState):
         query = state.get("query", "")

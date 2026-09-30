@@ -1,5 +1,5 @@
-from langchain_openai import ChatOpenAI
 from core import config
+from core.llm_client import get_llm
 from core.schemas import RouterState, RouteDecision
 from core.prompts import ROUTER_PROMPT
 from core.database import DatabaseManager
@@ -10,7 +10,7 @@ class SpecialtyRoutingNode:
 
     def __init__(self):
         print("⏳ [Router] Initializing Intent Analyzer...")
-        self.llm = ChatOpenAI(model=config.LLM_MODEL, api_key=config.OPENAI_API_KEY, temperature=0)
+        self.llm = get_llm(temperature=0)
         self.db_manager = DatabaseManager()
 
     def _load_valid_domains(self, guideline_ids=None):
@@ -49,7 +49,7 @@ class SpecialtyRoutingNode:
 
     def process(self, state: RouterState):
         query = state["query"]
-        structured_llm = self.llm.with_structured_output(RouteDecision)
+        structured_llm = self.llm.with_structured_output(RouteDecision, method=config.LLM_STRUCTURED_OUTPUT_METHOD)
 
         valid_domains = state.get("filtered_specialties")
         if valid_domains is None:

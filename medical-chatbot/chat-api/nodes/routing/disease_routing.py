@@ -1,6 +1,6 @@
 import asyncio
-from langchain_openai import ChatOpenAI
 from core import config
+from core.llm_client import get_llm
 from core.schemas import RouterState, SpecialtyDiseaseDecision
 from core.prompts import DISEASE_ROUTING_PROMPT
 from core.database import DatabaseManager
@@ -11,7 +11,7 @@ class DiseaseRoutingNode:
 
     def __init__(self):
         print("⏳ [Disease Router] Initializing...")
-        self.llm = ChatOpenAI(model=config.LLM_MODEL, api_key=config.OPENAI_API_KEY, temperature=0)
+        self.llm = get_llm(temperature=0)
         self.db_manager = DatabaseManager()
 
     def _load_disease_candidates(self, specialty_name: str, guideline_ids=None):
@@ -78,7 +78,7 @@ class DiseaseRoutingNode:
                 query=query,
             )
 
-            structured_llm = self.llm.with_structured_output(SpecialtyDiseaseDecision)
+            structured_llm = self.llm.with_structured_output(SpecialtyDiseaseDecision, method=config.LLM_STRUCTURED_OUTPUT_METHOD)
             try:
                 decision = await structured_llm.ainvoke(prompt)
                 valid_diseases = set(candidates)

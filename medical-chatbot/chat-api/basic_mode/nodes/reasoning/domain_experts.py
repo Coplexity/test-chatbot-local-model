@@ -1,6 +1,5 @@
 import asyncio
-from langchain_openai import ChatOpenAI
-from core import config
+from core.llm_client import get_llm
 from basic_mode.core.schemas import RouterState
 from basic_mode.core.prompts import EXPERT_PROMPT
 
@@ -10,7 +9,7 @@ class DomainExpertsNode:
 
     def __init__(self):
         print("⏳ [Experts] Initializing Expert Agents...")
-        self.llm = ChatOpenAI(model=config.LLM_MODEL, api_key=config.OPENAI_API_KEY, temperature=0.1)
+        self.llm = get_llm(temperature=0.1)
 
     async def stream_single_report(self, query: str, domain_name: str, context: str):
         """Stream one specialty report token-by-token for low-latency terminal/UI output."""

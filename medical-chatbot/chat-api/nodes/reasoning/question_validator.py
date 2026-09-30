@@ -1,6 +1,6 @@
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from core import config
+from core.llm_client import get_llm
 from core.schemas import RouterState, ValidationResult
 from core.prompts import QUESTION_VALIDATION_PROMPT
 
@@ -10,11 +10,11 @@ class QuestionValidatorNode:
 
     def __init__(self):
         print("⏳ [Validator] Initializing Question Validator...")
-        self.llm = ChatOpenAI(model=config.LLM_MODEL, api_key=config.OPENAI_API_KEY, temperature=0)
+        self.llm = get_llm(temperature=0)
 
     def process(self, state: RouterState):
         query = state["query"]
-        structured_llm = self.llm.with_structured_output(ValidationResult)
+        structured_llm = self.llm.with_structured_output(ValidationResult, method=config.LLM_STRUCTURED_OUTPUT_METHOD)
 
         prompt = QUESTION_VALIDATION_PROMPT.format(query=query)
 
