@@ -105,7 +105,11 @@ export default function InsertPage() {
                     className="form-select"
                     value={ownerChoice}
                     onChange={e => setOwnerChoice(e.target.value)}
+                    disabled={owners.length === 0}
                   >
+                    <option value="">
+                      {owners.length === 0 ? 'Chưa có tài khoản sở hữu khả dụng' : '-- Chọn tài khoản sở hữu --'}
+                    </option>
                     {owners.map(owner => (
                       <option key={owner.user_id} value={owner.user_id}>
                         {owner.full_name || owner.email} - {owner.role}
