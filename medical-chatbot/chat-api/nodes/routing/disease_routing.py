@@ -86,6 +86,8 @@ class DiseaseRoutingNode:
                 seen = set()
 
                 for disease_name in decision.ten_benh:
+                    # Qwen có thể chép cả dòng ứng viên dạng "<chuyên khoa>: <bệnh>"
+                    disease_name = disease_name.removeprefix(f"{specialty_name}: ").strip()
                     if disease_name in valid_diseases and disease_name not in seen:
                         seen.add(disease_name)
                         selected.append(disease_name)
