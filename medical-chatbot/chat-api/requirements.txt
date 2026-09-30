@@ -2,9 +2,6 @@ langgraph
 langchain-openai
 fastapi
 uvicorn[standard]
-streamlit
 psycopg2-binary
-sentence-transformers
 pydantic
 python-dotenv
-FlagEmbedding

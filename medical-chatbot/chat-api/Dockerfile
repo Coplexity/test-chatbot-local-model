@@ -6,6 +6,7 @@ WORKDIR /app
 # Cài một số system deps cơ bản
 RUN apt-get update && apt-get install -y \
     build-essential \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy file requirements và cài đặt
