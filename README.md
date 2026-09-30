@@ -11,6 +11,13 @@ chatbot_local/
 - `ai_documents_management`: database PostgreSQL/pgvector va guideline/document backend.
 - `medical-chatbot`: frontend, NestJS backend va FastAPI chat-api.
 
+## Ban Giao: LLM Chay Tren Server A
+
+`chat-api` da chuyen phan sinh van ban tu OpenAI `gpt-4.1` sang Qwen3.6-27B tren Server A (vLLM). Embedding van dung OpenAI.
+
+- [BAN_GIAO.md](BAN_GIAO.md): trang thai, thong tin can dien, cach deploy va kiem tra. Doc file nay truoc.
+- [Tai lieu cho local model mới/](Tai%20lieu%20cho%20local%20model%20mới/): tai lieu van hanh Server A va API contract.
+
 ## Mo Bang VS Code
 
 Nen mo file workspace o root repo:
