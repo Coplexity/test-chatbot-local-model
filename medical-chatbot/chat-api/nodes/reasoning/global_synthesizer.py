@@ -53,11 +53,24 @@ class GlobalSynthesizerNode:
         )
         print(f"🧬 [Global Synthesizer] Merging {stream_count} data streams...")
         all_reports_text = ""
+        # Nhóm chỉ có một báo cáo được chuyển thẳng lên tầng trên, nên cùng một nội dung có thể xuất hiện
+        # ở cả tầng chuyên khoa, bệnh và văn bản. Chỉ đưa mỗi nội dung vào prompt một lần.
+        seen_contents = set()
+
+        def is_new(content):
+            key = (content or "").strip()
+            if not key or key in seen_contents:
+                return False
+            seen_contents.add(key)
+            return True
+
         if specialty_report_items:
             for item in specialty_report_items:
                 specialty = (item.get("specialty") or "unknown").upper()
                 disease_names = item.get("disease_names") or []
                 content = item.get("report") or ""
+                if not is_new(content):
+                    continue
                 all_reports_text += (
                     f"\n=== TỔNG HỢP CHUYÊN KHOA {specialty}"
                     f" | diseases={disease_names} ===\n{content}\n"
@@ -69,6 +82,8 @@ class GlobalSynthesizerNode:
                 disease_name = item.get("disease_name") or "không rõ"
                 source_document_ids = item.get("source_document_ids") or []
                 content = item.get("report") or ""
+                if not is_new(content):
+                    continue
                 all_reports_text += (
                     f"\n--- TỔNG HỢP BỆNH | specialty={specialty}"
                     f" | disease_name={disease_name}"
@@ -82,6 +97,8 @@ class GlobalSynthesizerNode:
                 disease_name = item.get("disease_name") or "không rõ"
                 doc_rank = item.get("doc_rank")
                 content = item.get("report") or ""
+                if not is_new(content):
+                    continue
                 all_reports_text += (
                     f"\n--- BÁO CÁO TỪ KHOA {specialty} | document_id={document_id}"
                     f" | benh={disease_name} | doc_rank={doc_rank}"
@@ -90,6 +107,8 @@ class GlobalSynthesizerNode:
 
         if reports and not specialty_report_items:
             for domain, content in reports.items():
+                if not is_new(content):
+                    continue
                 all_reports_text += f"\n--- BÁO CÁO TỪ KHOA {domain.upper()} ---\n{content}\n"
 
         prompt = SYNTHESIZER_PROMPT.format(

@@ -39,6 +39,11 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 RETRIEVAL_DEEP_DOCUMENT_LIMIT = int(_env("RETRIEVAL_DEEP_DOCUMENT_LIMIT", "4"))
 RETRIEVAL_DEEP_TOP_K = int(_env("RETRIEVAL_DEEP_TOP_K", "6"))
 
+# Báo cáo trung gian (expert, tổng hợp bệnh, tổng hợp chuyên khoa) chỉ là đầu vào cho bước sau.
+# Prompt yêu cầu tối đa khoảng ngần này từ; trần token = số từ x 4 chỉ để chặn khi model viết quá dài.
+INTERMEDIATE_REPORT_MAX_WORDS = int(_env("INTERMEDIATE_REPORT_MAX_WORDS", "300"))
+INTERMEDIATE_REPORT_MAX_TOKENS = INTERMEDIATE_REPORT_MAX_WORDS * 4
+
 # 3. DATABASE
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", "5436"))

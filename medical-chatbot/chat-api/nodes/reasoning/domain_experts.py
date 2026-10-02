@@ -1,8 +1,9 @@
 import asyncio
 from core.context_budget import fit_prompt_to_budget
-from core.llm_client import get_llm
+from core import config
+from core.llm_client import get_llm, warn_if_truncated
 from core.schemas import RouterState
-from core.prompts import EXPERT_PROMPT
+from core.prompts import EXPERT_PROMPT, INTERMEDIATE_LENGTH_RULE
 
 class DomainExpertsNode:
     
@@ -12,7 +13,7 @@ class DomainExpertsNode:
         self.llm = get_llm(temperature=0.1)
 
     @staticmethod
-    async def _build_prompt(query: str, domain_name: str, context: str, label: str) -> str:
+    async def _build_prompt(query: str, domain_name: str, context: str, label: str, length_rule: str = "") -> str:
         """Dựng prompt cho một chuyên gia; bỏ bớt chunk xếp hạng thấp nếu vượt ngân sách token của A."""
 
         def build_prompt(context_text: str) -> str:
@@ -21,6 +22,7 @@ class DomainExpertsNode:
                 context=context_text,
                 query=query,
                 FALLBACK_ANSWER="Trong guidelines không có đủ thông tin để mình có thể trả lời câu hỏi này.",
+                length_rule=length_rule,
             )
 
         return await fit_prompt_to_budget(build_prompt, context, label)
@@ -59,9 +61,12 @@ class DomainExpertsNode:
         async def generate_single_report(doc):
             domain_name = doc.get("specialty", "")
             context = doc.get("context", "")
-            prompt = await self._build_prompt(query, domain_name, context, f"{domain_name} / văn bản {doc.get('document_id', '')}")
+            label = f"{domain_name} / văn bản {doc.get('document_id', '')}"
+            length_rule = INTERMEDIATE_LENGTH_RULE.format(max_words=config.INTERMEDIATE_REPORT_MAX_WORDS)
+            prompt = await self._build_prompt(query, domain_name, context, label, length_rule)
 
-            res = await self.llm.ainvoke(prompt)
+            res = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
+            warn_if_truncated(res, label)
             return {
                 "document_id": doc.get("document_id", ""),
                 "disease_name": doc.get("disease_name", ""),

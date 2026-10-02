@@ -131,6 +131,7 @@ EMBEDDING_MODEL=text-embedding-3-large
 
 RETRIEVAL_DEEP_DOCUMENT_LIMIT=4
 RETRIEVAL_DEEP_TOP_K=6
+INTERMEDIATE_REPORT_MAX_WORDS=300
 ```
 
 Giai thich nhanh:
@@ -143,13 +144,14 @@ Giai thich nhanh:
 - `LLM_MAX_TOKENS`: tran output moi lan goi, tinh trong context 65536 cua A.
 - `LLM_CONTEXT_TOKENS`: context cua model tren A. Ngan sach input moi lan goi = `LLM_CONTEXT_TOKENS - LLM_MAX_TOKENS - 256` (mac dinh 61184 token). Truoc moi lan goi expert, `chat-api` dem token bang endpoint `/tokenize` cua A; neu vuot ngan sach thi bo bot chunk xep hang thap nhat va ghi log `[Context Budget]`.
 - `RETRIEVAL_DEEP_DOCUMENT_LIMIT`, `RETRIEVAL_DEEP_TOP_K`: che do deep lay toi da bao nhieu van ban moi chuyen khoa va bao nhieu chunk moi van ban. Moi van ban la mot lan goi LLM rieng, nen tang hai so nay se lam cau tra loi cham hon. Che do basic khong doi (10 chunk moi chuyen khoa).
+- `INTERMEDIATE_REPORT_MAX_WORDS`: do dai toi da (so tu) cua bao cao trung gian: expert khi co nhieu van ban/chuyen khoa, tong hop benh, tong hop chuyen khoa. Tran output = so tu x 4 token. Cau tra loi cuoi cho nguoi dung khong bi gioi han. Nhom chi co mot bao cao thi chuyen thang len buoc sau, khong goi LLM.
 - `LLM_MAX_CONCURRENCY`: so request LLM dong thoi tu `chat-api`. A dang chay `MAX_NUM_SEQS=1` nen de `1`.
 - `LLM_STRUCTURED_OUTPUT_METHOD`: `json_schema` hoac `function_calling` cho cac node routing/validator.
 - `OPENAI_API_KEY`: chi con dung cho embedding. Khong commit file `.env`.
 
 ### 4.1. Ket Noi Toi LLM Tren Server A
 
-Server A chi listen `127.0.0.1:8000`, nen tu may local can mo SSH tunnel. Cong 8000 cua may local da dung cho guideline backend, vi vay tunnel dung cong 8001:
+Server A chi listen tren `127.0.0.1`, nen tu may local can mo SSH tunnel. Cong cua vLLM tren A lay theo `PORT` trong `.env` cua thu muc `llm` tren A (tai lieu ghi 8000, ban dang chay tu 2026-10-01 dung 8001); thay cong ben phai cua lenh duoi cho khop. Cong 8000 cua may local da dung cho guideline backend, vi vay tunnel dung cong 8001 o may local:
 
 ```bash
 ssh -N -L 8001:127.0.0.1:8000 <user>@<server-a>

@@ -82,6 +82,12 @@ def get_llm(temperature: float) -> ChatOpenAI:
     )
 
 
+def warn_if_truncated(response, label: str):
+    """Báo khi câu trả lời bị cắt vì chạm trần max_tokens (finish_reason=length)."""
+    if (getattr(response, "response_metadata", None) or {}).get("finish_reason") == "length":
+        print(f"⚠️ [LLM] {label}: báo cáo bị cắt vì chạm trần max_tokens.")
+
+
 async def count_tokens(prompt: str) -> int:
     """Đếm token input của một prompt đúng như A sẽ nhận (đã qua chat template của Qwen)."""
     global _tokenize_warned

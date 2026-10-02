@@ -78,6 +78,8 @@ services:
       # Retrieval deep mode: số văn bản mỗi chuyên khoa và số chunk mỗi văn bản
       RETRIEVAL_DEEP_DOCUMENT_LIMIT: ${RETRIEVAL_DEEP_DOCUMENT_LIMIT:-4}
       RETRIEVAL_DEEP_TOP_K: ${RETRIEVAL_DEEP_TOP_K:-6}
+      # Độ dài tối đa (số từ) của báo cáo trung gian: expert, tổng hợp bệnh, tổng hợp chuyên khoa
+      INTERMEDIATE_REPORT_MAX_WORDS: ${INTERMEDIATE_REPORT_MAX_WORDS:-300}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}

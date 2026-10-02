@@ -2,8 +2,9 @@ import asyncio
 from collections import defaultdict
 
 
-from core.llm_client import get_llm
-from core.prompts import DISEASE_AGGREGATOR_PROMPT
+from core import config
+from core.llm_client import get_llm, warn_if_truncated
+from core.prompts import DISEASE_AGGREGATOR_PROMPT, INTERMEDIATE_LENGTH_RULE
 from core.schemas import RouterState
 
 
@@ -31,6 +32,15 @@ class DiseaseAggregatorNode:
         async def aggregate_single_group(group_key, reports):
             specialty, disease_name = group_key
             ranked_reports = sorted(reports, key=lambda x: int(x.get("doc_rank", 0)))
+            if len(ranked_reports) == 1:
+                # Chỉ một văn bản thì không có gì để gộp: dùng luôn báo cáo văn bản, khỏi gọi LLM viết lại.
+                only = ranked_reports[0]
+                return {
+                    "disease_name": disease_name,
+                    "specialty": specialty,
+                    "report": only.get("report", ""),
+                    "source_document_ids": [str(only.get("document_id", ""))],
+                }
 
             all_reports_text = ""
             source_document_ids = []
@@ -50,9 +60,11 @@ class DiseaseAggregatorNode:
                 specialty=specialty.upper(),
                 query=query,
                 all_reports_text=all_reports_text,
+                length_rule=INTERMEDIATE_LENGTH_RULE.format(max_words=config.INTERMEDIATE_REPORT_MAX_WORDS),
             )
 
-            response = await self.llm.ainvoke(prompt)
+            response = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
+            warn_if_truncated(response, f"tổng hợp bệnh {disease_name}")
 
             return {
                 "disease_name": disease_name,
