@@ -103,7 +103,11 @@ def check_validation_schema():
 
 
 def check_route_schema():
-    prompt = ROUTER_PROMPT.format(domains_string=", ".join(SAMPLE_DOMAINS), query=SAMPLE_QUERY)
+    prompt = ROUTER_PROMPT.format(
+        domains_string=", ".join(SAMPLE_DOMAINS),
+        query=SAMPLE_QUERY,
+        max_specialties=config.DEEP_MAX_SPECIALTIES,
+    )
     result = _structured(RouteDecision, prompt)
     names = [item.name for item in result.analyzed_specialties]
     assert names, "không chọn chuyên khoa nào"

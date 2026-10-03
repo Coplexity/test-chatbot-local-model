@@ -26,32 +26,6 @@ class GlobalSynthesizerNode:
         document_reports = state.get("document_reports", [])
         transformer = CitationStreamTransformer()
 
-        if not reports and not specialty_report_items and not disease_reports and not document_reports:
-            fallback = (
-                "### Kết luận sơ bộ\n"
-                "- Tôi chưa đủ thông tin để định vị chính xác vấn đề của bạn.\n"
-                "\n"
-                "### Bạn có thể bổ sung\n"
-                "- Triệu chứng chính (đau ở đâu, mức độ, thời gian kéo dài).\n"
-                "- Dấu hiệu đi kèm (sốt, nôn, khó thở, phát ban...).\n"
-                "- Tiền sử bệnh và thuốc đang dùng (nếu có)."
-            )
-            for token in self._stream_tokens(fallback):
-                delta = transformer.feed(token)
-                if delta:
-                    yield delta
-            tail = transformer.flush()
-            if tail:
-                yield tail
-            return
-
-        stream_count = (
-            len(specialty_report_items)
-            or len(reports)
-            or len(disease_reports)
-            or len(document_reports)
-        )
-        print(f"🧬 [Global Synthesizer] Merging {stream_count} data streams...")
         all_reports_text = ""
         # Nhóm chỉ có một báo cáo được chuyển thẳng lên tầng trên, nên cùng một nội dung có thể xuất hiện
         # ở cả tầng chuyên khoa, bệnh và văn bản. Chỉ đưa mỗi nội dung vào prompt một lần.
@@ -111,6 +85,33 @@ class GlobalSynthesizerNode:
                     continue
                 all_reports_text += f"\n--- BÁO CÁO TỪ KHOA {domain.upper()} ---\n{content}\n"
 
+        # Không có báo cáo, hoặc mọi báo cáo đều rỗng: trả câu cố định thay vì để LLM trả lời không có dữ liệu.
+        if not all_reports_text:
+            fallback = (
+                "### Kết luận sơ bộ\n"
+                "- Tôi chưa đủ thông tin để định vị chính xác vấn đề của bạn.\n"
+                "\n"
+                "### Bạn có thể bổ sung\n"
+                "- Triệu chứng chính (đau ở đâu, mức độ, thời gian kéo dài).\n"
+                "- Dấu hiệu đi kèm (sốt, nôn, khó thở, phát ban...).\n"
+                "- Tiền sử bệnh và thuốc đang dùng (nếu có)."
+            )
+            for token in self._stream_tokens(fallback):
+                delta = transformer.feed(token)
+                if delta:
+                    yield delta
+            tail = transformer.flush()
+            if tail:
+                yield tail
+            return
+
+        stream_count = (
+            len(specialty_report_items)
+            or len(reports)
+            or len(disease_reports)
+            or len(document_reports)
+        )
+        print(f"🧬 [Global Synthesizer] Merging {stream_count} data streams...")
         prompt = SYNTHESIZER_PROMPT.format(
             all_reports_text=all_reports_text,
             query=query,

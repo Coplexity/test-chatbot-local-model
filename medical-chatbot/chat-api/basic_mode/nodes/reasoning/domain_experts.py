@@ -1,7 +1,6 @@
-import asyncio
 from core.context_budget import fit_prompt_to_budget
 from core import config
-from core.llm_client import get_llm, warn_if_truncated
+from core.llm_client import gather_skipping_failures, get_llm, report_text
 from basic_mode.core.schemas import RouterState
 from basic_mode.core.prompts import EXPERT_PROMPT
 from core.prompts import INTERMEDIATE_LENGTH_RULE
@@ -44,14 +43,17 @@ class DomainExpertsNode:
 
         async def generate_single_report(domain_name, context):
             length_rule = INTERMEDIATE_LENGTH_RULE.format(max_words=config.INTERMEDIATE_REPORT_MAX_WORDS)
-            prompt = await self._build_prompt(query, domain_name, context, domain_name, length_rule)
-
-            res = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
-            warn_if_truncated(res, domain_name)
-            return domain_name, res.content
+            try:
+                prompt = await self._build_prompt(query, domain_name, context, domain_name, length_rule)
+                res = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
+            except Exception as exc:
+                print(f"❌ [Experts] {domain_name}: lỗi khi tạo báo cáo ({type(exc).__name__}: {exc}), bỏ báo cáo này.")
+                raise
+            return domain_name, report_text(res, domain_name)
 
         tasks = [generate_single_report(name, ctx) for name, ctx in contexts.items()]
-        results = await asyncio.gather(*tasks) if tasks else []
+        # Một chuyên khoa lỗi (timeout, lỗi từ A) chỉ làm thiếu báo cáo của chuyên khoa đó, không hỏng cả câu trả lời.
+        results = await gather_skipping_failures(tasks) if tasks else []
         reports = {name: content for name, content in results}
 
         # CHỈ TRẢ VỀ REPORTS ĐỂ TRƯỞNG KHOA LÀM VIỆC TIẾP

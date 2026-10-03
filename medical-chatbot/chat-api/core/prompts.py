@@ -48,7 +48,7 @@ DANH SÁCH CHUYÊN KHOA HỢP LỆ (WHITELIST):
 QUY TẮC BẮT BUỘC:
 1. Chỉ chọn chuyên khoa nằm trong whitelist.
 2. Không được tạo chuyên khoa mới.
-3. Số chuyên khoa tối đa có thể trả về: 5.
+3. Số chuyên khoa tối đa có thể trả về: {max_specialties}. Sắp xếp analyzed_specialties theo mức độ liên quan giảm dần. Nếu câu hỏi nêu tên bệnh (bệnh đang mắc, bệnh nền, bệnh đang điều trị), chuyên khoa mà bệnh đó trực thuộc LUÔN đứng đầu danh sách; chỉ dùng các chỗ còn lại cho chuyên khoa của triệu chứng/biến chứng.
 4. Trả analyzed_specialties rỗng CHỈ khi input hoàn toàn không liên quan y tế.
 
 TIÊU CHÍ CHỌN CHUYÊN KHOA (Decision Rules với từng Intent):
@@ -77,7 +77,7 @@ TIÊU CHÍ CHỌN CHUYÊN KHOA (Decision Rules với từng Intent):
    → Ví dụ: "Bệnh X nguy hiểm không?" → Chuyên khoa 
 
 **QUY LUẬN CHUNG:**
-   - Tối đa 5 chuyên khoa
+   - Tối đa {max_specialties} chuyên khoa
    - Không suy diễn xa hay tự tạo chuyên khoa
    - Nếu bệnh không rõ hoặc không có chuyên khoa nào phù hợp → THÊM "tram_y_te" 
 

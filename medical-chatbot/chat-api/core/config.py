@@ -36,13 +36,17 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 
 # Retrieval của deep mode: số văn bản tối đa mỗi chuyên khoa và số chunk tối đa mỗi văn bản.
 # Mỗi văn bản là một lần gọi LLM riêng, nên hai số này quyết định cả kích thước prompt lẫn thời gian chờ.
-RETRIEVAL_DEEP_DOCUMENT_LIMIT = int(_env("RETRIEVAL_DEEP_DOCUMENT_LIMIT", "4"))
-RETRIEVAL_DEEP_TOP_K = int(_env("RETRIEVAL_DEEP_TOP_K", "6"))
+RETRIEVAL_DEEP_DOCUMENT_LIMIT = max(1, int(_env("RETRIEVAL_DEEP_DOCUMENT_LIMIT", "4")))
+RETRIEVAL_DEEP_TOP_K = max(1, int(_env("RETRIEVAL_DEEP_TOP_K", "6")))
+# Số chuyên khoa tối đa router của deep mode được chọn. Mỗi chuyên khoa thêm tới
+# RETRIEVAL_DEEP_DOCUMENT_LIMIT báo cáo expert, nên đây là con số chính quyết định thời gian tới chữ đầu tiên.
+DEEP_MAX_SPECIALTIES = max(1, int(_env("DEEP_MAX_SPECIALTIES", "3")))
 
 # Báo cáo trung gian (expert, tổng hợp bệnh, tổng hợp chuyên khoa) chỉ là đầu vào cho bước sau.
 # Prompt yêu cầu tối đa khoảng ngần này từ; trần token = số từ x 4 chỉ để chặn khi model viết quá dài.
-INTERMEDIATE_REPORT_MAX_WORDS = int(_env("INTERMEDIATE_REPORT_MAX_WORDS", "300"))
-INTERMEDIATE_REPORT_MAX_TOKENS = INTERMEDIATE_REPORT_MAX_WORDS * 4
+INTERMEDIATE_REPORT_MAX_WORDS = max(1, int(_env("INTERMEDIATE_REPORT_MAX_WORDS", "300")))
+# Không vượt LLM_MAX_TOKENS: ngân sách input chỉ chừa chỗ cho chừng ấy token output.
+INTERMEDIATE_REPORT_MAX_TOKENS = min(INTERMEDIATE_REPORT_MAX_WORDS * 4, LLM_MAX_TOKENS)
 
 # 3. DATABASE
 DB_HOST = os.getenv("DB_HOST", "localhost")

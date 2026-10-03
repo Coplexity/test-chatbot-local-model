@@ -81,16 +81,20 @@ class DiseaseRoutingNode:
             structured_llm = self.llm.with_structured_output(SpecialtyDiseaseDecision, method=config.LLM_STRUCTURED_OUTPUT_METHOD)
             try:
                 decision = await structured_llm.ainvoke(prompt)
-                valid_diseases = set(candidates)
+                # So khớp sau khi bỏ khoảng trắng hai đầu, nhưng trả về đúng giá trị trong DB
+                # vì retrieval lọc bằng ten_benh = ANY(...) chính xác từng ký tự.
+                valid_diseases = {disease.strip(): disease for disease in candidates}
                 selected = []
                 seen = set()
 
-                for disease_name in decision.ten_benh:
-                    # Qwen có thể chép cả dòng ứng viên dạng "<chuyên khoa>: <bệnh>"
-                    disease_name = disease_name.removeprefix(f"{specialty_name}: ").strip()
-                    if disease_name in valid_diseases and disease_name not in seen:
-                        seen.add(disease_name)
-                        selected.append(disease_name)
+                for raw_name in decision.ten_benh:
+                    # Qwen có thể chép cả dòng ứng viên dạng "- <chuyên khoa>: <bệnh>"
+                    disease_name = (raw_name or "").strip().removeprefix("- ").strip()
+                    disease_name = disease_name.removeprefix(f"{specialty_name}:").strip()
+                    db_name = valid_diseases.get(disease_name)
+                    if db_name is not None and db_name not in seen:
+                        seen.add(db_name)
+                        selected.append(db_name)
 
                 if not selected:
                     print(f"⚠️ [Disease Router] {specialty_name}: LLM không trả bệnh hợp lệ, fallback về candidates DB.")

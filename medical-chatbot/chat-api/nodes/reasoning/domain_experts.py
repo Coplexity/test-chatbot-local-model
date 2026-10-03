@@ -1,7 +1,6 @@
-import asyncio
 from core.context_budget import fit_prompt_to_budget
 from core import config
-from core.llm_client import get_llm, warn_if_truncated
+from core.llm_client import gather_skipping_failures, get_llm, report_text
 from core.schemas import RouterState
 from core.prompts import EXPERT_PROMPT, INTERMEDIATE_LENGTH_RULE
 
@@ -63,20 +62,23 @@ class DomainExpertsNode:
             context = doc.get("context", "")
             label = f"{domain_name} / văn bản {doc.get('document_id', '')}"
             length_rule = INTERMEDIATE_LENGTH_RULE.format(max_words=config.INTERMEDIATE_REPORT_MAX_WORDS)
-            prompt = await self._build_prompt(query, domain_name, context, label, length_rule)
-
-            res = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
-            warn_if_truncated(res, label)
+            try:
+                prompt = await self._build_prompt(query, domain_name, context, label, length_rule)
+                res = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
+            except Exception as exc:
+                print(f"❌ [Experts] {label}: lỗi khi tạo báo cáo ({type(exc).__name__}: {exc}), bỏ báo cáo này.")
+                raise
             return {
                 "document_id": doc.get("document_id", ""),
                 "disease_name": doc.get("disease_name", ""),
                 "specialty": domain_name,
                 "doc_rank": doc.get("doc_rank", 0),
-                "report": res.content,
+                "report": report_text(res, label),
             }
 
         tasks = [generate_single_report(doc) for doc in document_contexts]
-        results = await asyncio.gather(*tasks) if tasks else []
+        # Một văn bản lỗi (timeout, lỗi từ A) chỉ làm thiếu báo cáo của văn bản đó, không hỏng cả câu trả lời.
+        results = await gather_skipping_failures(tasks) if tasks else []
         reports = {
             f"doc:{item['document_id']}:rank:{item['doc_rank']}": item["report"]
             for item in results

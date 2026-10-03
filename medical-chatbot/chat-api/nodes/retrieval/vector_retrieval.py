@@ -15,6 +15,9 @@ class VectorRetrievalNode:
         self.retrieval_top_k = config.RETRIEVAL_DEEP_TOP_K
         self.retrieval_candidate_k = 30
         self.document_limit_per_specialty = config.RETRIEVAL_DEEP_DOCUMENT_LIMIT
+        # Số dòng ứng viên lấy từ DB mỗi chuyên khoa, giữ như bản gốc (10 văn bản x 30) và không gắn với
+        # document_limit_per_specialty: lấy ít hơn thì văn bản xếp sau có thể thiếu chunk dù vẫn được chọn.
+        self.candidate_row_limit = 10 * self.retrieval_candidate_k
         # Keep only chunks whose vector distance to query is good enough.
         # Lower distance means more relevant.
         self.max_chunk_semantic_distance = 0.65
@@ -157,7 +160,7 @@ class VectorRetrievalNode:
                             domain_name,
                             disease_values,
                             self.retrieval_candidate_k,
-                            self.document_limit_per_specialty * self.retrieval_candidate_k,
+                            self.candidate_row_limit,
                         ),
                     )
                 else:
@@ -200,7 +203,7 @@ class VectorRetrievalNode:
                             active_version_ids,
                             domain_name,
                             self.retrieval_candidate_k,
-                            self.document_limit_per_specialty * self.retrieval_candidate_k,
+                            self.candidate_row_limit,
                         ),
                     )
 

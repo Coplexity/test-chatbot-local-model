@@ -3,7 +3,7 @@ from collections import defaultdict
 
 
 from core import config
-from core.llm_client import get_llm, warn_if_truncated
+from core.llm_client import get_llm, report_text
 from core.prompts import INTERMEDIATE_LENGTH_RULE, SPECIALTY_AGGREGATOR_PROMPT
 from core.schemas import RouterState
 
@@ -56,12 +56,18 @@ class SpecialtyAggregatorNode:
                 all_disease_reports_text=all_disease_reports_text,
                 length_rule=INTERMEDIATE_LENGTH_RULE.format(max_words=config.INTERMEDIATE_REPORT_MAX_WORDS),
             )
-            response = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
-            warn_if_truncated(response, f"tổng hợp chuyên khoa {specialty}")
+            label = f"tổng hợp chuyên khoa {specialty}"
+            try:
+                response = await self.llm.ainvoke(prompt, max_tokens=config.INTERMEDIATE_REPORT_MAX_TOKENS)
+                report = report_text(response, label)
+            except Exception as exc:
+                # Gộp lỗi thì đưa nguyên các báo cáo bệnh lên bước sau, không mất thông tin.
+                print(f"❌ [Specialty Aggregator] {label}: lỗi khi gọi LLM ({type(exc).__name__}: {exc}), dùng nguyên các báo cáo bệnh.")
+                report = all_disease_reports_text.strip()
 
             report_item = {
                 "specialty": specialty,
-                "report": response.content,
+                "report": report,
                 "disease_names": list(dict.fromkeys(disease_names)),
             }
             return specialty, report_item
