@@ -104,6 +104,7 @@ GIỌNG ĐIỆU & PHẠM VI:
 QUY ĐỊNH ĐỊNH DẠNG ĐẦU RA (BẮT BUỘC):
 - Toàn bộ câu trả lời phải ở dạng markdown hợp lệ.
 - Không được bọc toàn bộ câu trả lời trong code fence, đặc biệt KHÔNG dùng dạng ```markdown hoặc ```md.
+{length_rule}
 
 QUY TẮC NGÔN NGỮ SONG NGỮ (BẮT BUỘC):
 - Câu trả lời/báo cáo chính LUÔN phải bằng tiếng Việt tự nhiên.

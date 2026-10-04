@@ -26,7 +26,67 @@ class GlobalSynthesizerNode:
         document_reports = state.get("document_reports", [])
         transformer = CitationStreamTransformer()
 
-        if not reports and not specialty_report_items and not disease_reports and not document_reports:
+        all_reports_text = ""
+        # Nhóm chỉ có một báo cáo được chuyển thẳng lên tầng trên, nên cùng một nội dung có thể xuất hiện
+        # ở cả tầng chuyên khoa, bệnh và văn bản. Chỉ đưa mỗi nội dung vào prompt một lần.
+        seen_contents = set()
+
+        def is_new(content):
+            key = (content or "").strip()
+            if not key or key in seen_contents:
+                return False
+            seen_contents.add(key)
+            return True
+
+        if specialty_report_items:
+            for item in specialty_report_items:
+                specialty = (item.get("specialty") or "unknown").upper()
+                disease_names = item.get("disease_names") or []
+                content = item.get("report") or ""
+                if not is_new(content):
+                    continue
+                all_reports_text += (
+                    f"\n=== TỔNG HỢP CHUYÊN KHOA {specialty}"
+                    f" | diseases={disease_names} ===\n{content}\n"
+                )
+
+        if disease_reports:
+            for item in disease_reports:
+                specialty = (item.get("specialty") or "unknown").upper()
+                disease_name = item.get("disease_name") or "không rõ"
+                source_document_ids = item.get("source_document_ids") or []
+                content = item.get("report") or ""
+                if not is_new(content):
+                    continue
+                all_reports_text += (
+                    f"\n--- TỔNG HỢP BỆNH | specialty={specialty}"
+                    f" | disease_name={disease_name}"
+                    f" | source_document_ids={source_document_ids} ---\n{content}\n"
+                )
+
+        if document_reports:
+            for item in document_reports:
+                specialty = (item.get("specialty") or "unknown").upper()
+                document_id = item.get("document_id") or "unknown"
+                disease_name = item.get("disease_name") or "không rõ"
+                doc_rank = item.get("doc_rank")
+                content = item.get("report") or ""
+                if not is_new(content):
+                    continue
+                all_reports_text += (
+                    f"\n--- BÁO CÁO TỪ KHOA {specialty} | document_id={document_id}"
+                    f" | benh={disease_name} | doc_rank={doc_rank}"
+                    f" ---\n{content}\n"
+                )
+
+        if reports and not specialty_report_items:
+            for domain, content in reports.items():
+                if not is_new(content):
+                    continue
+                all_reports_text += f"\n--- BÁO CÁO TỪ KHOA {domain.upper()} ---\n{content}\n"
+
+        # Không có báo cáo, hoặc mọi báo cáo đều rỗng: trả câu cố định thay vì để LLM trả lời không có dữ liệu.
+        if not all_reports_text:
             fallback = (
                 "### Kết luận sơ bộ\n"
                 "- Tôi chưa đủ thông tin để định vị chính xác vấn đề của bạn.\n"
@@ -52,46 +112,6 @@ class GlobalSynthesizerNode:
             or len(document_reports)
         )
         print(f"🧬 [Global Synthesizer] Merging {stream_count} data streams...")
-        all_reports_text = ""
-        if specialty_report_items:
-            for item in specialty_report_items:
-                specialty = (item.get("specialty") or "unknown").upper()
-                disease_names = item.get("disease_names") or []
-                content = item.get("report") or ""
-                all_reports_text += (
-                    f"\n=== TỔNG HỢP CHUYÊN KHOA {specialty}"
-                    f" | diseases={disease_names} ===\n{content}\n"
-                )
-
-        if disease_reports:
-            for item in disease_reports:
-                specialty = (item.get("specialty") or "unknown").upper()
-                disease_name = item.get("disease_name") or "không rõ"
-                source_document_ids = item.get("source_document_ids") or []
-                content = item.get("report") or ""
-                all_reports_text += (
-                    f"\n--- TỔNG HỢP BỆNH | specialty={specialty}"
-                    f" | disease_name={disease_name}"
-                    f" | source_document_ids={source_document_ids} ---\n{content}\n"
-                )
-
-        if document_reports:
-            for item in document_reports:
-                specialty = (item.get("specialty") or "unknown").upper()
-                document_id = item.get("document_id") or "unknown"
-                disease_name = item.get("disease_name") or "không rõ"
-                doc_rank = item.get("doc_rank")
-                content = item.get("report") or ""
-                all_reports_text += (
-                    f"\n--- BÁO CÁO TỪ KHOA {specialty} | document_id={document_id}"
-                    f" | benh={disease_name} | doc_rank={doc_rank}"
-                    f" ---\n{content}\n"
-                )
-
-        if reports and not specialty_report_items:
-            for domain, content in reports.items():
-                all_reports_text += f"\n--- BÁO CÁO TỪ KHOA {domain.upper()} ---\n{content}\n"
-
         prompt = SYNTHESIZER_PROMPT.format(
             all_reports_text=all_reports_text,
             query=query,

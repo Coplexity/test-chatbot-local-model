@@ -48,7 +48,7 @@ DANH SÁCH CHUYÊN KHOA HỢP LỆ (WHITELIST):
 QUY TẮC BẮT BUỘC:
 1. Chỉ chọn chuyên khoa nằm trong whitelist.
 2. Không được tạo chuyên khoa mới.
-3. Số chuyên khoa tối đa có thể trả về: 5.
+3. Số chuyên khoa tối đa có thể trả về: {max_specialties}. Sắp xếp analyzed_specialties theo mức độ liên quan giảm dần. Nếu câu hỏi nêu tên bệnh (bệnh đang mắc, bệnh nền, bệnh đang điều trị), chuyên khoa mà bệnh đó trực thuộc LUÔN đứng đầu danh sách; chỉ dùng các chỗ còn lại cho chuyên khoa của triệu chứng/biến chứng.
 4. Trả analyzed_specialties rỗng CHỈ khi input hoàn toàn không liên quan y tế.
 
 TIÊU CHÍ CHỌN CHUYÊN KHOA (Decision Rules với từng Intent):
@@ -77,7 +77,7 @@ TIÊU CHÍ CHỌN CHUYÊN KHOA (Decision Rules với từng Intent):
    → Ví dụ: "Bệnh X nguy hiểm không?" → Chuyên khoa 
 
 **QUY LUẬN CHUNG:**
-   - Tối đa 5 chuyên khoa
+   - Tối đa {max_specialties} chuyên khoa
    - Không suy diễn xa hay tự tạo chuyên khoa
    - Nếu bệnh không rõ hoặc không có chuyên khoa nào phù hợp → THÊM "tram_y_te" 
 
@@ -110,6 +110,7 @@ GIỌNG ĐIỆU & PHẠM VI:
 QUY ĐỊNH ĐỊNH DẠNG ĐẦU RA (BẮT BUỘC):
 - Toàn bộ câu trả lời phải ở dạng markdown hợp lệ.
 - Không được bọc toàn bộ câu trả lời trong code fence, đặc biệt KHÔNG dùng dạng ```markdown hoặc ```md.
+{length_rule}
 
 QUY TẮC NGÔN NGỮ SONG NGỮ (BẮT BUỘC):
 - Câu trả lời/báo cáo chính LUÔN phải bằng tiếng Việt tự nhiên.
@@ -209,6 +210,7 @@ Cú pháp thẻ: <source id="[CHUNK_ID]">copy đúng một đoạn ngắn nguyê
    1) Kết luận chính
    2) Luận cứ tổng hợp (có trích dẫn)
    3) Điểm còn chưa chắc hoặc còn thiếu dữ liệu
+{length_rule}
 """
 
 # ==========================================
@@ -265,6 +267,7 @@ Ví dụ: Bệnh nhân có dấu hiệu <source id="[4d8a7f9b-3f2e-4e0a-a3a0-9c1
    1) Kết luận chuyên khoa theo trọng tâm câu hỏi
    2) Luận cứ ưu tiên (bệnh liên quan cao) và luận cứ bổ trợ (bệnh liên quan thấp hơn)
    3) Điểm còn chưa chắc hoặc còn thiếu dữ liệu
+{length_rule}
 """
 
 # ==========================================
@@ -340,3 +343,11 @@ DANH SÁCH BỆNH ỨNG VIÊN:
 USER INPUT:
 {query}
 """
+
+# ==========================================
+# QUY TẮC ĐỘ DÀI CHO BÁO CÁO TRUNG GIAN
+# ==========================================
+# Báo cáo của expert và hai bước tổng hợp chỉ là đầu vào cho bước sau. Server A sinh từng token và xử lý
+# từng request một, nên báo cáo trung gian càng ngắn thì người dùng càng sớm thấy chữ đầu tiên.
+INTERMEDIATE_LENGTH_RULE = """- Đây là báo cáo trung gian cho bước tổng hợp phía sau, không gửi trực tiếp cho người dùng. Viết ngắn gọn, tối đa khoảng {max_words} từ (không tính nội dung trong thẻ <source>).
+- Chỉ giữ các ý trả lời trực tiếp câu hỏi, mỗi ý kèm thẻ <source>; không chào hỏi, không nhắc lại câu hỏi, không viết lời khuyên chung hay phần kết."""

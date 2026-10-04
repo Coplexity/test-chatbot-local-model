@@ -1,13 +1,23 @@
+import asyncio
+import re
+
 import httpx
 from langchain_openai import ChatOpenAI
 
 from core import config
 
 _STRUCTURED_OUTPUT_METHODS = {"json_schema", "function_calling"}
+# Chỗ kết thúc một ý trọn vẹn: dấu chấm câu, xuống dòng hoặc thẻ trích dẫn đã đóng.
+_COMPLETE_UNIT_END = re.compile(r"[.!?…](?=\s|$)|\n|</source>")
+
+# Dùng khi không gọi được /tokenize. Đo thật trên prompt tiếng Việt của expert là ~3.07 ký tự/token;
+# lấy thấp hơn để ước lượng dư token, thà cắt thừa còn hơn vượt context.
+_FALLBACK_CHARS_PER_TOKEN = 2.5
 
 _http_client = None
 _http_async_client = None
 _announced = False
+_tokenize_warned = False
 
 
 def _validate_config():
@@ -75,3 +85,93 @@ def get_llm(temperature: float) -> ChatOpenAI:
         http_client=http_client,
         http_async_client=http_async_client,
     )
+
+
+def _drop_unclosed_source(text: str) -> str:
+    start = text.rfind("<source")
+    if start != -1 and "</source>" not in text[start:]:
+        return text[:start]
+    return text
+
+
+def trim_truncated_tail(text: str) -> str:
+    """Bỏ phần đuôi dở của báo cáo bị cắt: thẻ <source> chưa đóng và nửa câu cuối.
+
+    Thẻ <source> dở mà lọt xuống bước tổng hợp thì CitationStreamTransformer sẽ giữ lại
+    mọi chữ phía sau để chờ thẻ đóng, làm câu trả lời đứng hình hoặc gộp sai trích dẫn.
+    """
+    text = _drop_unclosed_source(text)
+    # Đuôi bị cắt ngay giữa tên thẻ, ví dụ "<sour" hoặc "</sou".
+    last_lt = text.rfind("<")
+    if last_lt != -1:
+        tail = text[last_lt:]
+        if "<source".startswith(tail) or "</source>".startswith(tail):
+            text = text[:last_lt]
+    # Cắt về cuối câu, cuối dòng hoặc cuối thẻ trích dẫn gần nhất.
+    ends = [m.end() for m in _COMPLETE_UNIT_END.finditer(text)]
+    if ends:
+        text = text[: ends[-1]]
+    # Điểm cắt có thể nằm giữa một thẻ <source> đã đóng, nên kiểm tra lại.
+    return _drop_unclosed_source(text).rstrip()
+
+
+def report_text(response, label: str) -> str:
+    """Lấy nội dung báo cáo trung gian; bị cắt vì chạm trần max_tokens thì bỏ phần đuôi dở."""
+    content = response.content or ""
+    if (getattr(response, "response_metadata", None) or {}).get("finish_reason") != "length":
+        return content
+    trimmed = trim_truncated_tail(content)
+    print(
+        f"⚠️ [LLM] {label}: báo cáo bị cắt vì chạm trần max_tokens, "
+        f"bỏ {len(content) - len(trimmed)} ký tự đuôi dở."
+    )
+    return trimmed
+
+
+async def gather_skipping_failures(coros):
+    """Chạy song song các lời gọi; lời gọi nào lỗi thì bỏ, chỉ báo lỗi khi tất cả đều lỗi.
+
+    Mỗi lời gọi tự in log lỗi kèm nhãn của nó trước khi raise.
+    """
+    outcomes = await asyncio.gather(*coros, return_exceptions=True)
+    for item in outcomes:
+        # Bị hủy (người dùng ngắt kết nối...) thì dừng luôn, không coi là một báo cáo lỗi.
+        if isinstance(item, BaseException) and not isinstance(item, Exception):
+            raise item
+    successes = [item for item in outcomes if not isinstance(item, Exception)]
+    if outcomes and not successes:
+        # Không còn báo cáo nào để trả lời: báo lỗi như trước, thay vì trả câu "chưa đủ thông tin".
+        raise next(item for item in outcomes if isinstance(item, Exception))
+    return successes
+
+
+async def count_tokens(prompt: str) -> int:
+    """Đếm token input của một prompt đúng như A sẽ nhận (đã qua chat template của Qwen)."""
+    global _tokenize_warned
+    _validate_config()
+    # /tokenize của vLLM nằm ở gốc server, không nằm dưới /v1.
+    url = config.LLM_BASE_URL.removesuffix("/v1") + "/tokenize"
+    payload = {
+        "model": config.LLM_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "add_generation_prompt": True,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    try:
+        # Client riêng: đếm token không chiếm slot sinh văn bản của LLM_MAX_CONCURRENCY.
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
+            )
+            response.raise_for_status()
+            return int(response.json()["count"])
+    except Exception as exc:
+        if not _tokenize_warned:
+            print(
+                f"⚠️ [LLM] Không đếm được token qua {url} ({type(exc).__name__}); "
+                f"tạm ước lượng {_FALLBACK_CHARS_PER_TOKEN} ký tự/token."
+            )
+            _tokenize_warned = True
+        return int(len(prompt) / _FALLBACK_CHARS_PER_TOKEN) + 1

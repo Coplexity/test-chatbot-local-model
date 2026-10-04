@@ -15,7 +15,8 @@ import urllib.error
 import urllib.request
 
 from core import config
-from core.llm_client import get_llm
+from core.context_budget import fit_prompt_to_budget, input_token_budget
+from core.llm_client import count_tokens, get_llm
 from core.prompts import DISEASE_ROUTING_PROMPT, QUESTION_VALIDATION_PROMPT, ROUTER_PROMPT
 from core.schemas import RouteDecision, SpecialtyDiseaseDecision, ValidationResult
 
@@ -102,7 +103,11 @@ def check_validation_schema():
 
 
 def check_route_schema():
-    prompt = ROUTER_PROMPT.format(domains_string=", ".join(SAMPLE_DOMAINS), query=SAMPLE_QUERY)
+    prompt = ROUTER_PROMPT.format(
+        domains_string=", ".join(SAMPLE_DOMAINS),
+        query=SAMPLE_QUERY,
+        max_specialties=config.DEEP_MAX_SPECIALTIES,
+    )
     result = _structured(RouteDecision, prompt)
     names = [item.name for item in result.analyzed_specialties]
     assert names, "không chọn chuyên khoa nào"
@@ -120,8 +125,11 @@ def check_disease_schema():
     )
     result = _structured(SpecialtyDiseaseDecision, prompt)
     assert result.ten_benh, "không chọn bệnh nào"
-    assert set(result.ten_benh) <= set(SAMPLE_DISEASES), f"bệnh ngoài danh sách: {result.ten_benh}"
-    return f"ten_benh={result.ten_benh}"
+    # Cùng cách chuẩn hóa với DiseaseRoutingNode: bỏ tiền tố "<chuyên khoa>: " nếu model chép cả dòng.
+    names = [name.removeprefix(f"{specialty}: ").strip() for name in result.ten_benh]
+    assert set(names) <= set(SAMPLE_DISEASES), f"bệnh ngoài danh sách: {result.ten_benh}"
+    prefixed = " (model trả kèm tiền tố chuyên khoa, đã chuẩn hóa)" if names != result.ten_benh else ""
+    return f"ten_benh={names}{prefixed}"
 
 
 async def check_parallel():
@@ -131,6 +139,41 @@ async def check_parallel():
     responses = await asyncio.gather(*(llm.ainvoke(prompt) for prompt in prompts))
     assert all(response.content.strip() for response in responses), "có response rỗng"
     return f"{len(responses)} request song song đều có kết quả"
+
+
+async def check_token_count():
+    # /tokenize phải khớp đúng số prompt_tokens mà A tính cho request thật; lệch nghĩa là đang ước lượng.
+    prompt = "Nêu 3 dấu hiệu cảnh báo của sốt xuất huyết, mỗi ý một dòng."
+    counted = await count_tokens(prompt)
+    response = await get_llm(temperature=0).ainvoke(prompt, max_tokens=1)
+    actual = (response.usage_metadata or {}).get("input_tokens")
+    assert counted == actual, f"/tokenize đếm {counted} nhưng A tính {actual} token input"
+    return f"/tokenize={counted} khớp prompt_tokens={actual}; ngân sách input={input_token_budget()}"
+
+
+async def check_context_budget():
+    # Context cố tình vượt ngân sách: phải bị bỏ chunk từ cuối (xếp hạng thấp) cho tới khi vừa.
+    budget = input_token_budget()
+    sentence = "Người bệnh cần được theo dõi sát dấu hiệu sinh tồn và đánh giá lại sau mỗi 6 giờ điều trị. "
+    chunk_body = sentence * 160
+    chunk_tokens = await count_tokens(chunk_body)
+    total = budget // chunk_tokens + 4
+    context = "\n\n".join(
+        f"[check-{index}]\nTÓM TẮT: đoạn kiểm tra {index}\nNỘI DUNG: {chunk_body}" for index in range(1, total + 1)
+    )
+
+    def build_prompt(text):
+        return f"Tài liệu:\n{text}\n\nCâu hỏi: {SAMPLE_QUERY}"
+
+    before = await count_tokens(build_prompt(context))
+    assert before > budget, f"context thử chỉ có {before} token, chưa vượt ngân sách {budget}"
+    prompt = await fit_prompt_to_budget(build_prompt, context, "check_llm")
+    after = await count_tokens(prompt)
+    kept = prompt.count("\nNỘI DUNG: ")
+    assert after <= budget, f"sau khi cắt vẫn còn {after} token, vượt ngân sách {budget}"
+    assert 0 < kept < total, f"giữ {kept}/{total} chunk"
+    assert "[check-1]\n" in prompt and f"[check-{total}]\n" not in prompt, "phải giữ chunk đầu và bỏ chunk cuối"
+    return f"{before} -> {after} token (ngân sách {budget}), giữ {kept}/{total} chunk"
 
 
 CHECKS = [
@@ -143,6 +186,8 @@ CHECKS = [
     ("structured output: RouteDecision", check_route_schema),
     ("structured output: SpecialtyDiseaseDecision", check_disease_schema),
     ("parallel requests", check_parallel),
+    ("token counting via /tokenize", check_token_count),
+    ("context budget trimming", check_context_budget),
 ]
 
 

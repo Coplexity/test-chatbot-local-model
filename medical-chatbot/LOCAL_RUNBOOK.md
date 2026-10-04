@@ -121,12 +121,18 @@ LLM_API_KEY=key_cua_server_a
 LLM_MODEL=qwen3.6-27b
 LLM_TIMEOUT_SECONDS=180
 LLM_MAX_RETRIES=0
+LLM_CONTEXT_TOKENS=65536
 LLM_MAX_TOKENS=4096
-LLM_MAX_CONCURRENCY=1
+LLM_MAX_CONCURRENCY=16
 LLM_STRUCTURED_OUTPUT_METHOD=json_schema
 
 OPENAI_API_KEY=your_openai_key_here
 EMBEDDING_MODEL=text-embedding-3-large
+
+RETRIEVAL_DEEP_DOCUMENT_LIMIT=4
+RETRIEVAL_DEEP_TOP_K=6
+DEEP_MAX_SPECIALTIES=3
+INTERMEDIATE_REPORT_MAX_WORDS=300
 ```
 
 Giai thich nhanh:
@@ -137,13 +143,17 @@ Giai thich nhanh:
 - `DB_SYNCHRONIZE=true`: dung cho local de backend tu tao schema/table can thiet. Khi deploy production nen dat `false`.
 - `LLM_BASE_URL`, `LLM_API_KEY`: dia chi va key cua Server A. Thieu mot trong hai thi `chat-api` dung ngay luc khoi dong voi loi `Thiếu cấu hình LLM`, khong tu chuyen sang OpenAI.
 - `LLM_MAX_TOKENS`: tran output moi lan goi, tinh trong context 65536 cua A.
-- `LLM_MAX_CONCURRENCY`: so request LLM dong thoi tu `chat-api`. A dang chay `MAX_NUM_SEQS=1` nen de `1`.
+- `LLM_CONTEXT_TOKENS`: context cua model tren A. Ngan sach input moi lan goi = `LLM_CONTEXT_TOKENS - LLM_MAX_TOKENS - 256` (mac dinh 61184 token). Truoc moi lan goi expert, `chat-api` dem token bang endpoint `/tokenize` cua A; neu vuot ngan sach thi bo bot chunk xep hang thap nhat va ghi log `[Context Budget]`.
+- `RETRIEVAL_DEEP_DOCUMENT_LIMIT`, `RETRIEVAL_DEEP_TOP_K`: che do deep lay toi da bao nhieu van ban moi chuyen khoa va bao nhieu chunk moi van ban. Moi van ban la mot lan goi LLM rieng, nen tang hai so nay se lam cau tra loi cham hon. Che do basic khong doi (10 chunk moi chuyen khoa).
+- `DEEP_MAX_SPECIALTIES`: che do deep tra cuu toi da bao nhieu chuyen khoa cho mot cau hoi (mac dinh 3, toi da 12 bao cao expert). Router xep chuyen khoa theo muc do lien quan, chuyen khoa cua benh duoc neu ten dung dau; phan thua bi cat va ghi log `[Router] Giữ ...`. Che do basic van toi da 5 chuyen khoa.
+- `INTERMEDIATE_REPORT_MAX_WORDS`: do dai toi da (so tu) cua bao cao trung gian: moi bao cao expert cua deep, expert cua basic khi co nhieu chuyen khoa, tong hop benh, tong hop chuyen khoa. Tran output = so tu x 4 token (khong vuot `LLM_MAX_TOKENS`). Bao cao cham tran thi bi bo phan duoi do (the `<source>` chua dong, nua cau cuoi) va ghi log `báo cáo bị cắt`. Cau tra loi cuoi cho nguoi dung (ke ca basic mot chuyen khoa) khong bi gioi han. Nhom chi co mot bao cao thi chuyen thang len buoc sau, khong goi LLM.
+- `LLM_MAX_CONCURRENCY`: so request LLM dong thoi tu `chat-api`. Dat bang `MAX_NUM_SEQS` cua vLLM tren A (hien la 16). Dat `1` thi cac bao cao expert phai cho nhau: deep 3 chuyen khoa x 4 van ban mat khoang 300 giay moi co chu dau tien.
 - `LLM_STRUCTURED_OUTPUT_METHOD`: `json_schema` hoac `function_calling` cho cac node routing/validator.
 - `OPENAI_API_KEY`: chi con dung cho embedding. Khong commit file `.env`.
 
 ### 4.1. Ket Noi Toi LLM Tren Server A
 
-Server A chi listen `127.0.0.1:8000`, nen tu may local can mo SSH tunnel. Cong 8000 cua may local da dung cho guideline backend, vi vay tunnel dung cong 8001:
+Server A chi listen tren `127.0.0.1`, nen tu may local can mo SSH tunnel. Cong cua vLLM tren A lay theo `PORT` trong `.env` cua thu muc `llm` tren A (tai lieu ghi 8000, ban dang chay tu 2026-10-01 dung 8001); thay cong ben phai cua lenh duoi cho khop. Cong 8000 cua may local da dung cho guideline backend, vi vay tunnel dung cong 8001 o may local:
 
 ```bash
 ssh -N -L 8001:127.0.0.1:8000 <user>@<server-a>

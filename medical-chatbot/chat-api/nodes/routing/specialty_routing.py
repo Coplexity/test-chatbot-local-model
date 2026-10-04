@@ -66,15 +66,22 @@ class SpecialtyRoutingNode:
         prompt = ROUTER_PROMPT.format(
             domains_string=domains_string,
             query=query,
+            max_specialties=config.DEEP_MAX_SPECIALTIES,
         )
 
         decision = structured_llm.invoke(prompt)
 
+        # Bỏ tên trùng trước khi cắt, để một chuyên khoa lặp lại không chiếm chỗ của chuyên khoa khác.
         filtered_domains = [
-            {"name": s.name}
-            for s in decision.analyzed_specialties
-            if s.name in valid_domains
+            {"name": name}
+            for name in dict.fromkeys(s.name for s in decision.analyzed_specialties)
+            if name in valid_domains
         ]
+        if len(filtered_domains) > config.DEEP_MAX_SPECIALTIES:
+            # Prompt đã yêu cầu xếp theo mức độ liên quan, nên giữ các chuyên khoa đứng đầu.
+            dropped = [s["name"] for s in filtered_domains[config.DEEP_MAX_SPECIALTIES:]]
+            print(f"✂️ [Router] Giữ {config.DEEP_MAX_SPECIALTIES} chuyên khoa đầu, bỏ {dropped}.")
+            filtered_domains = filtered_domains[: config.DEEP_MAX_SPECIALTIES]
 
         print(f"🧭 [Router] Điều phối đến các domain: {[s['name'] for s in filtered_domains]}")
         return {"analyzed_specialties": filtered_domains, "hypothetical_document": decision.hypothetical_document}
