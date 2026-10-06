@@ -42,13 +42,16 @@ class VectorRetrievalNode:
 
             self.embed_model = SentenceTransformer(config.EMBEDDING_MODEL)
 
-        try:
-            from FlagEmbedding import FlagReranker
+        if config.RERANKER_ENABLED:
+            try:
+                from FlagEmbedding import FlagReranker
 
-            print(f"⏳ [Retriever] Loading reranker model: {self.rerank_model_name}...")
-            self.reranker = FlagReranker(self.rerank_model_name, use_fp16=False)
-        except Exception as e:
-            print(f"⚠️ [Retriever] Không thể khởi tạo reranker, fallback về vector-only. Error: {e}")
+                print(f"⏳ [Retriever] Loading reranker model: {self.rerank_model_name}...")
+                self.reranker = FlagReranker(self.rerank_model_name, use_fp16=False)
+            except Exception as e:
+                print(f"⚠️ [Retriever] Không thể khởi tạo reranker, fallback về vector-only. Error: {e}")
+        else:
+            print("ℹ️ [Retriever] Reranker tắt (RERANKER_ENABLED=false), dùng vector-only.")
 
         self.db_manager = DatabaseManager()
 
@@ -257,7 +260,10 @@ class VectorRetrievalNode:
                     for chunk_id, chunk_text, chunk_abstract, semantic_distance in distance_filtered_rows
                 ]
                 # Step 2: rerank within the filtered set.
-                ranked_rows_with_scores = self._rerank_rows(rerank_query, rerank_input)
+                # Chạy trong thread để rerank (CPU-bound) không chặn event loop của các request khác.
+                ranked_rows_with_scores = await asyncio.to_thread(
+                    self._rerank_rows, rerank_query, rerank_input
+                )
                 if not ranked_rows_with_scores:
                     continue
 
