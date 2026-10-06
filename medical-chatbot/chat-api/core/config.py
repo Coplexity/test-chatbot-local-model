@@ -55,3 +55,9 @@ DB_PORT = int(os.getenv("DB_PORT", "5436"))
 DB_NAME = os.getenv("DB_NAME", "guideline_management")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "postgres")
+
+# 4. RERANKER (namdp-ptit/ViRanker)
+# Mặc định TẮT: chạy trên CPU mất ~5s/chunk (~4 phút/câu hỏi), vượt timeout FE.
+# Image hiện không cài FlagEmbedding nên vốn đã fallback vector-only; cờ này
+# để hành vi đó rõ ràng và không đổi nếu sau này cài thêm thư viện. Chỉ bật khi có GPU.
+RERANKER_ENABLED = _env("RERANKER_ENABLED", "false").lower() in {"1", "true", "yes", "on"}

@@ -26,13 +26,16 @@ class VectorRetrievalNode:
 
             self.embed_model = SentenceTransformer(config.EMBEDDING_MODEL)
 
-        try:
-            from FlagEmbedding import FlagReranker
+        if config.RERANKER_ENABLED:
+            try:
+                from FlagEmbedding import FlagReranker
 
-            print(f"⏳ [Retriever] Loading reranker model: {self.rerank_model_name}...")
-            self.reranker = FlagReranker(self.rerank_model_name, use_fp16=False)
-        except Exception as e:
-            print(f"⚠️ [Retriever] Không thể khởi tạo reranker, fallback về vector-only. Error: {e}")
+                print(f"⏳ [Retriever] Loading reranker model: {self.rerank_model_name}...")
+                self.reranker = FlagReranker(self.rerank_model_name, use_fp16=False)
+            except Exception as e:
+                print(f"⚠️ [Retriever] Không thể khởi tạo reranker, fallback về vector-only. Error: {e}")
+        else:
+            print("ℹ️ [Retriever] Reranker tắt (RERANKER_ENABLED=false), dùng vector-only.")
 
         self.db_manager = DatabaseManager()
 
@@ -157,7 +160,10 @@ class VectorRetrievalNode:
                 continue
 
             rerank_query = (query or "").strip() or hyde_text
-            selected_rows = self._rerank_rows(rerank_query, rows, self.retrieval_top_k)
+            # Chạy trong thread để rerank (CPU-bound) không chặn event loop của các request khác.
+            selected_rows = await asyncio.to_thread(
+                self._rerank_rows, rerank_query, rows, self.retrieval_top_k
+            )
 
             formatted_chunks = []
             for row in selected_rows:
