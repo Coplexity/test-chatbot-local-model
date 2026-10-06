@@ -27,8 +27,9 @@ LLM_MAX_RETRIES = int(_env("LLM_MAX_RETRIES", "0"))
 LLM_CONTEXT_TOKENS = int(_env("LLM_CONTEXT_TOKENS", "65536"))
 # Trần output mỗi lần gọi, tính trong context của A.
 LLM_MAX_TOKENS = int(_env("LLM_MAX_TOKENS", "4096"))
-# Số request LLM đồng thời từ process này; <= 0 là không giới hạn.
-LLM_MAX_CONCURRENCY = int(_env("LLM_MAX_CONCURRENCY", "1"))
+# Số request LLM đồng thời từ process này; <= 0 là không giới hạn. Đặt bằng MAX_NUM_SEQS của vLLM trên A
+# (hiện là 16): để 1 thì các báo cáo expert phải chờ nhau và câu nhiều chuyên khoa vượt 120 giây.
+LLM_MAX_CONCURRENCY = int(_env("LLM_MAX_CONCURRENCY", "16"))
 # "json_schema" hoặc "function_calling"
 LLM_STRUCTURED_OUTPUT_METHOD = _env("LLM_STRUCTURED_OUTPUT_METHOD", "json_schema")
 
